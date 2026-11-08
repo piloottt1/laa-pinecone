@@ -1,3 +1,7 @@
+## LAA Pinecone Backend
+
+This is a modified PineconeMC build for [LAA Launcher](https://github.com/piloottt1/laa-launcher), maintained by piloottt1. It is not an official PineconeMC release. It adds `--ely-login`, which opens only the Ely.by device-code sign-in dialog, saves the account, and exits without opening the main PineconeMC window. The build uses the LAA Launcher Ely.by client ID and removes upstream third-party API keys. The source and GPL-3.0 license are provided in this repository.
+
 > [!CAUTION]
 > **There's now malicious links in the wild that disguise themselves as this project.**
 >

@@ -321,6 +321,7 @@ class Application : public QApplication {
     QList<QUrl> m_urlsToImport;
     QString m_instanceIdToShowWindowOf;
     bool m_showMainWindow = false;
+    bool m_loginEly = false;
     std::unique_ptr<QFile> logFile;
     std::unique_ptr<LogModel> logModel;
 

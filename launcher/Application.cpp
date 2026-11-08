@@ -54,6 +54,7 @@
 #include "ui/ViewLogWindow.h"
 
 #include "ui/dialogs/ProgressDialog.h"
+#include "ui/dialogs/ElyLoginDialog.h"
 #include "ui/instanceview/AccessibleInstanceView.h"
 
 #include "ui/pages/BasePageProvider.h"
@@ -100,6 +101,7 @@
 #include <QStringLiteral>
 #include <QStyleFactory>
 #include <QTranslator>
+#include <QTimer>
 #include <QWindow>
 
 #include "InstanceList.h"
@@ -320,6 +322,7 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
           { { "o", "offline" }, "Launch offline, with given player name (only valid in combination with --launch)", "offline" },
           { "alive", "Write a small '" + liveCheckFile + "' file after the launcher starts" },
           { "show-window", "Show the main launcher window (useful in combination with --launch)" },
+          { "ely-login", "Open Ely.by sign-in and save the account without opening the main launcher window" },
           { { "I", "import" }, "Import instance or resource from specified local path or URL", "url" },
           { "show", "Opens the window for the specified instance (by instance ID)", "show" } });
     // Has to be positional for some OS to handle that properly
@@ -339,6 +342,7 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
         m_offlineName = parser.value("offline");
     }
     m_liveCheck = parser.isSet("alive");
+    m_loginEly = parser.isSet("ely-login");
 
     m_instanceIdToShowWindowOf = parser.value("show");
     m_showMainWindow = parser.isSet("show-window");
@@ -455,7 +459,11 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
             bool sentMessage = false;
             int timeout = 2000;
 
-            if (m_instanceIdToLaunch.isEmpty()) {
+            if (m_loginEly) {
+                ApplicationMessage login;
+                login.command = "ely-login";
+                sentMessage = m_peerInstance->sendMessage(login.serialize(), timeout);
+            } else if (m_instanceIdToLaunch.isEmpty()) {
                 ApplicationMessage activate;
                 activate.command = "activate";
                 sentMessage = m_peerInstance->sendMessage(activate.serialize(), timeout);
@@ -1213,7 +1221,7 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
         installEventFilter(new ToolTipFilter);
     }
 
-    if (createSetupWizard()) {
+    if (!m_loginEly && createSetupWizard()) {
         return;
     }
 
@@ -1349,6 +1357,16 @@ void Application::setupWizardFinished(int status)
 void Application::performMainStartupAction()
 {
     m_status = Application::Initialized;
+    if (m_loginEly) {
+        if (auto account = ElyLoginDialog::newAccount(nullptr)) {
+            m_accounts->addAccount(account);
+            if (m_accounts->count() == 1) {
+                m_accounts->setDefaultAccount(account);
+            }
+        }
+        QTimer::singleShot(0, this, &QCoreApplication::quit);
+        return;
+    }
     if (!m_instanceIdToLaunch.isEmpty()) {
         auto inst = instances()->getInstanceById(m_instanceIdToLaunch);
         if (inst) {
@@ -1451,7 +1469,14 @@ void Application::messageReceived(const QByteArray& message)
         }
     }
 
-    if (command == "activate") {
+    if (command == "ely-login") {
+        if (auto account = ElyLoginDialog::newAccount(m_mainWindow)) {
+            m_accounts->addAccount(account);
+            if (m_accounts->count() == 1) {
+                m_accounts->setDefaultAccount(account);
+            }
+        }
+    } else if (command == "activate") {
         showMainWindow();
     } else if (command == "import") {
         QString url = received.args["url"];
