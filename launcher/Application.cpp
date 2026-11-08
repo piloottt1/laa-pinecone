@@ -1360,9 +1360,7 @@ void Application::performMainStartupAction()
     if (m_loginEly) {
         if (auto account = ElyLoginDialog::newAccount(nullptr)) {
             m_accounts->addAccount(account);
-            if (m_accounts->count() == 1) {
-                m_accounts->setDefaultAccount(account);
-            }
+            m_accounts->setDefaultAccount(account);
         }
         QTimer::singleShot(0, this, &QCoreApplication::quit);
         return;
@@ -1472,9 +1470,7 @@ void Application::messageReceived(const QByteArray& message)
     if (command == "ely-login") {
         if (auto account = ElyLoginDialog::newAccount(m_mainWindow)) {
             m_accounts->addAccount(account);
-            if (m_accounts->count() == 1) {
-                m_accounts->setDefaultAccount(account);
-            }
+            m_accounts->setDefaultAccount(account);
         }
     } else if (command == "activate") {
         showMainWindow();
