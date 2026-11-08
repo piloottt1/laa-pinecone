@@ -49,6 +49,7 @@
 #include <QPixmap>
 #include <QSize>
 #include <QUrl>
+#include <QUrlQuery>
 #include <QtWidgets/QPushButton>
 
 #include "qrencode.h"
@@ -191,8 +192,11 @@ void MSALoginDialog::authorizeWithBrowserWithExtra(QString url, QString code, [[
     this->adjustSize();
 
     const auto linkString = QString("<a href=\"%1\">%2</a>").arg(url, url);
-    if (url == m_linkUrl && !code.isEmpty()) {
-        url += QString("?otc=%1").arg(code);
+    m_url = QUrl(url);
+    if (m_url == QUrl(m_linkUrl) && !code.isEmpty()) {
+        QUrlQuery query(m_url);
+        query.addQueryItem("otc", code);
+        m_url.setQuery(query);
     }
     ui->code->setText(code);
 
@@ -201,7 +205,7 @@ void MSALoginDialog::authorizeWithBrowserWithExtra(QString url, QString code, [[
     pixmap.fill(Qt::white);
 
     QPainter painter(&pixmap);
-    paintQR(painter, size, url, Qt::black);
+    paintQR(painter, size, m_url.toString(), Qt::black);
 
     // Set the generated pixmap to the label
     ui->qr->setPixmap(pixmap);
