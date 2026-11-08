@@ -586,7 +586,7 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
         qInfo() << "<> Log initialized.";
     }
 
-    {
+    if (dirParam.isEmpty()) {
         auto migrated = handleDataMigration(
             dataPath, FS::PathCombine(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation), "../../PolyMC"), "PolyMC",
             "polymc.cfg");
