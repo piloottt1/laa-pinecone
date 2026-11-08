@@ -60,6 +60,8 @@ class LaunchController : public Task {
 
     void setOfflineName(const QString& offlineName) { m_offlineName = offlineName; }
 
+    void setQuietLaunch(bool quiet) { m_quietLaunch = quiet; }
+
     void setProfiler(BaseProfilerFactory* profiler) { m_profiler = profiler; }
 
     void setParentWidget(QWidget* widget) { m_parentWidget = widget; }
@@ -93,6 +95,7 @@ class LaunchController : public Task {
     LaunchMode m_actualLaunchMode = LaunchMode::Normal;
     BaseProfilerFactory* m_profiler = nullptr;
     QString m_offlineName;
+    bool m_quietLaunch = false;
     BaseInstance* m_instance = nullptr;
     QWidget* m_parentWidget = nullptr;
     InstanceWindow* m_console = nullptr;

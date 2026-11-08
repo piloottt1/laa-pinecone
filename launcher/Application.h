@@ -222,7 +222,8 @@ class Application : public QApplication {
                 LaunchMode mode = LaunchMode::Normal,
                 std::shared_ptr<MinecraftTarget> targetToJoin = nullptr,
                 shared_qobject_ptr<MinecraftAccount> accountToUse = nullptr,
-                const QString& offlineName = QString());
+                const QString& offlineName = QString(),
+                bool quietLaunch = false);
     bool kill(BaseInstance* instance);
     void closeCurrentWindow();
 
@@ -322,6 +323,7 @@ class Application : public QApplication {
     QString m_instanceIdToShowWindowOf;
     bool m_showMainWindow = false;
     bool m_loginEly = false;
+    bool m_quietLaunch = false;
     std::unique_ptr<QFile> logFile;
     std::unique_ptr<LogModel> logModel;
 

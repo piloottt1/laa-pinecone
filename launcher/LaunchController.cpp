@@ -52,6 +52,7 @@
 #include "ui/dialogs/ProgressDialog.h"
 
 #include <QInputDialog>
+#include <QEventLoop>
 #include <QList>
 #include <QPushButton>
 #include <utility>
@@ -173,14 +174,21 @@ LaunchDecision LaunchController::decideLaunchMode()
 
     if (state == AccountState::Working) {
         // refresh is in progress, we need to wait for it to finish to proceed.
-        ProgressDialog progDialog(m_parentWidget);
-        progDialog.setSkipButton(true, tr("Abort"));
-
         // TODO: this relies on tasks' synchronous signal dispatching nature
         // TODO: meaning currentTask can't complete and become null while this code is running
         // TODO: this code will produce a race condition when tasks become fully async
         auto task = accountToCheck->currentTask();
-        progDialog.execWithTask(task.get());
+        if (m_quietLaunch) {
+            QEventLoop wait;
+            connect(task.get(), &Task::finished, &wait, &QEventLoop::quit);
+            if (!task->isFinished()) {
+                wait.exec();
+            }
+        } else {
+            ProgressDialog progDialog(m_parentWidget);
+            progDialog.setSkipButton(true, tr("Abort"));
+            progDialog.execWithTask(task.get());
+        }
 
         if (task->getState() == State::AbortedByUser) {
             return LaunchDecision::Abort;
@@ -344,6 +352,10 @@ void LaunchController::login()
 
 bool LaunchController::reauthenticateAccount(const MinecraftAccountPtr& account, const QString& reason)
 {
+    if (m_quietLaunch) {
+        qWarning() << "Account must be reauthenticated:" << reason;
+        return false;
+    }
     auto button = QMessageBox::warning(
         m_parentWidget, tr("Account refresh failed"), tr("%1. Do you want to reauthenticate this account?").arg(reason),
         QMessageBox::StandardButton::Yes | QMessageBox::StandardButton::No, QMessageBox::StandardButton::Yes);
@@ -397,7 +409,7 @@ void LaunchController::launchInstance()
     }
 
     const auto* console = qobject_cast<InstanceWindow*>(m_parentWidget);
-    const auto showConsole = m_instance->settings()->get("ShowConsole").toBool();
+    const auto showConsole = !m_quietLaunch && m_instance->settings()->get("ShowConsole").toBool();
     if (!console && showConsole) {
         APPLICATION->showInstanceWindow(m_instance);
     }
@@ -489,7 +501,7 @@ void LaunchController::onSucceeded()
 
 void LaunchController::onFailed(QString reason)
 {
-    if (m_instance->settings()->get("ShowConsoleOnError").toBool()) {
+    if (!m_quietLaunch && m_instance->settings()->get("ShowConsoleOnError").toBool()) {
         APPLICATION->showInstanceWindow(m_instance, "console");
     }
     emitFailed(std::move(reason));
@@ -497,6 +509,13 @@ void LaunchController::onFailed(QString reason)
 
 void LaunchController::onProgressRequested(Task* task) const
 {
+    if (m_quietLaunch) {
+        m_launcher->proceed();
+        if (task && !task->isRunning() && !task->isFinished()) {
+            QMetaObject::invokeMethod(task, &Task::start, Qt::QueuedConnection);
+        }
+        return;
+    }
     ProgressDialog progDialog(m_parentWidget);
     progDialog.setSkipButton(true, tr("Abort"));
     m_launcher->proceed();
