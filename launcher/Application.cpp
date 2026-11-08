@@ -586,7 +586,7 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
         qInfo() << "<> Log initialized.";
     }
 
-    {
+    if (dirParam.isEmpty()) {
         bool migrated = false;
 
         if (!migrated)
