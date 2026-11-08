@@ -98,7 +98,11 @@ int MSALoginDialog::exec()
     connect(m_devicecode_task.get(), &AuthFlow::authorizeWithBrowser, this, &MSALoginDialog::authorizeWithBrowser);
     connect(m_devicecode_task.get(), &AuthFlow::authorizeWithBrowserWithExtra, this, &MSALoginDialog::authorizeWithBrowserWithExtra);
     connect(ui->buttonBox->button(QDialogButtonBox::Cancel), &QPushButton::clicked, m_devicecode_task.get(), &Task::abort);
-    QMetaObject::invokeMethod(m_authflow_task.get(), &Task::start, Qt::QueuedConnection);
+    // LAA uses Ely.by's device-code flow so the portable launcher does not
+    // depend on a loopback redirect URI registered with a fixed TCP port.
+    if (m_accountType != AccountType::Ely) {
+        QMetaObject::invokeMethod(m_authflow_task.get(), &Task::start, Qt::QueuedConnection);
+    }
     QMetaObject::invokeMethod(m_devicecode_task.get(), &Task::start, Qt::QueuedConnection);
 
     return QDialog::exec();
