@@ -323,6 +323,7 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
           { "alive", "Write a small '" + liveCheckFile + "' file after the launcher starts" },
           { "show-window", "Show the main launcher window (useful in combination with --launch)" },
           { "ely-login", "Open Ely.by sign-in and save the account without opening the main launcher window" },
+          { "quiet-launch", "Launch without PineconeMC progress and console windows (use with --launch)" },
           { { "I", "import" }, "Import instance or resource from specified local path or URL", "url" },
           { "show", "Opens the window for the specified instance (by instance ID)", "show" } });
     // Has to be positional for some OS to handle that properly
@@ -343,6 +344,7 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
     }
     m_liveCheck = parser.isSet("alive");
     m_loginEly = parser.isSet("ely-login");
+    m_quietLaunch = parser.isSet("quiet-launch");
 
     m_instanceIdToShowWindowOf = parser.value("show");
     m_showMainWindow = parser.isSet("show-window");
@@ -492,6 +494,9 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
                 if (m_launchOffline) {
                     launch.args["offline_enabled"] = "true";
                     launch.args["offline_name"] = m_offlineName;
+                }
+                if (m_quietLaunch) {
+                    launch.args["quiet_launch"] = "true";
                 }
                 sentMessage = m_peerInstance->sendMessage(launch.serialize(), timeout);
             }
@@ -1389,7 +1394,8 @@ void Application::performMainStartupAction()
                 qDebug() << "   Launching with account" << m_profileToUse;
             }
 
-            launch(inst, m_launchOffline ? LaunchMode::Offline : LaunchMode::Normal, targetToJoin, accountToUse, m_offlineName);
+            launch(inst, m_launchOffline ? LaunchMode::Offline : LaunchMode::Normal, targetToJoin, accountToUse, m_offlineName,
+                   m_quietLaunch);
 
             if (!m_showMainWindow) {
                 return;
@@ -1491,6 +1497,7 @@ void Application::messageReceived(const QByteArray& message)
         QString profile = received.args["profile"];
         bool offline = received.args["offline_enabled"] == "true";
         QString offlineName = received.args["offline_name"];
+        bool quietLaunch = received.args["quiet_launch"] == "true";
 
         BaseInstance* instance;
         if (!id.isEmpty()) {
@@ -1520,7 +1527,7 @@ void Application::messageReceived(const QByteArray& message)
             }
         }
 
-        launch(instance, offline ? LaunchMode::Offline : LaunchMode::Normal, serverObject, accountObject, offlineName);
+        launch(instance, offline ? LaunchMode::Offline : LaunchMode::Normal, serverObject, accountObject, offlineName, quietLaunch);
     } else {
         qWarning() << "Received invalid message" << message;
     }
@@ -1559,7 +1566,8 @@ bool Application::launch(BaseInstance* instance,
                          LaunchMode mode,
                          MinecraftTarget::Ptr targetToJoin,
                          MinecraftAccountPtr accountToUse,
-                         const QString& offlineName)
+                         const QString& offlineName,
+                         bool quietLaunch)
 {
     if (m_updateRunning) {
         qDebug() << "Cannot launch instances while an update is running. Please try again when updates are completed.";
@@ -1580,6 +1588,7 @@ bool Application::launch(BaseInstance* instance,
         controller->setTargetToJoin(targetToJoin);
         controller->setAccountToUse(accountToUse);
         controller->setOfflineName(offlineName);
+        controller->setQuietLaunch(quietLaunch);
         if (window) {
             controller->setParentWidget(window);
         } else if (m_mainWindow) {
