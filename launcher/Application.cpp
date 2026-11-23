@@ -319,6 +319,7 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
           { { "s", "server" }, "Join the specified server on launch (only valid in combination with --launch)", "address" },
           { { "w", "world" }, "Join the specified world on launch (only valid in combination with --launch)", "world" },
           { { "a", "profile" }, "Use the account specified by its profile name (only valid in combination with --launch)", "profile" },
+          { "profile-id", "Use the account specified by its profile ID (only valid in combination with --launch)", "id" },
           { { "o", "offline" }, "Launch offline, with given player name (only valid in combination with --launch)", "offline" },
           { "alive", "Write a small '" + liveCheckFile + "' file after the launcher starts" },
           { "show-window", "Show the main launcher window (useful in combination with --launch)" },
@@ -338,6 +339,7 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
     m_serverToJoin = parser.value("server");
     m_worldToJoin = parser.value("world");
     m_profileToUse = parser.value("profile");
+    m_profileIdToUse = parser.value("profile-id");
     if (parser.isSet("offline")) {
         m_launchOffline = true;
         m_offlineName = parser.value("offline");
@@ -359,9 +361,15 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
     }
 
     // error if --launch is missing with --server or --profile
-    if ((!m_serverToJoin.isEmpty() || !m_worldToJoin.isEmpty() || !m_profileToUse.isEmpty() || m_launchOffline) &&
+    if ((!m_serverToJoin.isEmpty() || !m_worldToJoin.isEmpty() || !m_profileToUse.isEmpty() ||
+         !m_profileIdToUse.isEmpty() || m_launchOffline) &&
         m_instanceIdToLaunch.isEmpty()) {
-        std::cerr << "--server, --profile and --offline can only be used in combination with --launch!" << std::endl;
+        std::cerr << "--server, --profile, --profile-id and --offline can only be used in combination with --launch!" << std::endl;
+        m_status = Application::Failed;
+        return;
+    }
+    if (!m_profileToUse.isEmpty() && !m_profileIdToUse.isEmpty()) {
+        std::cerr << "--profile and --profile-id cannot be used together!" << std::endl;
         m_status = Application::Failed;
         return;
     }
@@ -490,6 +498,9 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
                 }
                 if (!m_profileToUse.isEmpty()) {
                     launch.args["profile"] = m_profileToUse;
+                }
+                if (!m_profileIdToUse.isEmpty()) {
+                    launch.args["profile_id"] = m_profileIdToUse;
                 }
                 if (m_launchOffline) {
                     launch.args["offline_enabled"] = "true";
@@ -1385,6 +1396,14 @@ void Application::performMainStartupAction()
                     return;
                 }
                 qDebug() << "   Launching with account" << m_profileToUse;
+            } else if (!m_profileIdToUse.isEmpty()) {
+                const auto index = accounts()->findAccountByProfileId(m_profileIdToUse);
+                if (index < 0) {
+                    qWarning() << "Profile ID" << m_profileIdToUse << "does not resolve to any account.";
+                    return;
+                }
+                accountToUse = accounts()->at(index);
+                qDebug() << "   Launching with account ID" << m_profileIdToUse;
             }
 
             launch(inst, m_launchOffline ? LaunchMode::Offline : LaunchMode::Normal, targetToJoin, accountToUse, m_offlineName,
@@ -1488,6 +1507,7 @@ void Application::messageReceived(const QByteArray& message)
         QString server = received.args["server"];
         QString world = received.args["world"];
         QString profile = received.args["profile"];
+        QString profileId = received.args["profile_id"];
         bool offline = received.args["offline_enabled"] == "true";
         QString offlineName = received.args["offline_name"];
         bool quietLaunch = received.args["quiet_launch"] == "true";
@@ -1511,6 +1531,10 @@ void Application::messageReceived(const QByteArray& message)
             serverObject = std::make_shared<MinecraftTarget>(MinecraftTarget::parse(world, true));
         }
         MinecraftAccountPtr accountObject;
+        if (!profile.isEmpty() && !profileId.isEmpty()) {
+            qWarning() << "Launch command specified both profile name and profile ID.";
+            return;
+        }
         if (!profile.isEmpty()) {
             accountObject = accounts()->getAccountByProfileName(profile);
             if (!accountObject) {
@@ -1518,6 +1542,13 @@ void Application::messageReceived(const QByteArray& message)
                            << "does not resolve to any account.";
                 return;
             }
+        } else if (!profileId.isEmpty()) {
+            const auto index = accounts()->findAccountByProfileId(profileId);
+            if (index < 0) {
+                qWarning() << "Launch command requires the specified profile ID to be valid." << profileId;
+                return;
+            }
+            accountObject = accounts()->at(index);
         }
 
         launch(instance, offline ? LaunchMode::Offline : LaunchMode::Normal, serverObject, accountObject, offlineName, quietLaunch);

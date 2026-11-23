@@ -316,6 +316,7 @@ class Application : public QApplication {
     QString m_serverToJoin;
     QString m_worldToJoin;
     QString m_profileToUse;
+    QString m_profileIdToUse;
     bool m_launchOffline = false;
     QString m_offlineName;
     bool m_liveCheck = false;
