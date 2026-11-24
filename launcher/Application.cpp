@@ -1414,12 +1414,10 @@ void Application::performMainStartupAction()
             QTimer::singleShot(0, this, &QCoreApplication::quit);
         });
         connect(task.get(), &Task::succeeded, this, [this, account] {
-            const auto index = m_accounts->findAccountByProfileId(account->profileId());
-            const auto selected = index < 0 ? account : m_accounts->at(index);
-            if (index < 0) m_accounts->addAccount(account);
-            m_accounts->setDefaultAccount(selected);
-            writeLaaLoginEvent({ { "kind", "success" }, { "name", selected->profileName() },
-                                 { "id", selected->profileId() } });
+            m_accounts->addAccount(account);
+            m_accounts->setDefaultAccount(account);
+            writeLaaLoginEvent({ { "kind", "success" }, { "name", account->profileName() },
+                                 { "id", account->profileId() } });
             QTimer::singleShot(0, this, &QCoreApplication::quit);
         });
         QMetaObject::invokeMethod(task.get(), &Task::start, Qt::QueuedConnection);
