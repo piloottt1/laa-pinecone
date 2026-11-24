@@ -336,7 +336,7 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
           { "alive", "Write a small '" + liveCheckFile + "' file after the launcher starts" },
           { "show-window", "Show the main launcher window (useful in combination with --launch)" },
           { "ely-login", "Open Ely.by sign-in and save the account without opening the main launcher window" },
-          { { "laa-login" }, "Sign in without PineconeMC windows and emit JSON events", "ely|msa" },
+          { "laa-login", "Sign in without PineconeMC windows and emit JSON events", "ely" },
           { "quiet-launch", "Launch without PineconeMC progress and console windows (use with --launch)" },
           { { "I", "import" }, "Import instance or resource from specified local path or URL", "url" },
           { "show", "Opens the window for the specified instance (by instance ID)", "show" } });
@@ -360,7 +360,7 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
     m_liveCheck = parser.isSet("alive");
     m_loginEly = parser.isSet("ely-login");
     m_laaLogin = parser.value("laa-login");
-    if (!m_laaLogin.isEmpty() && m_laaLogin != "ely" && m_laaLogin != "msa") {
+    if (!m_laaLogin.isEmpty() && m_laaLogin != "ely") {
         writeLaaLoginEvent({ { "kind", "error" }, { "message", "invalidProvider" } });
         m_status = Application::Failed;
         return;
@@ -1398,14 +1398,12 @@ void Application::performMainStartupAction()
 {
     m_status = Application::Initialized;
     if (!m_laaLogin.isEmpty()) {
-        const auto type = m_laaLogin == "ely" ? AccountType::Ely : AccountType::MSA;
-        if ((type == AccountType::Ely && getElyClientID().isEmpty()) ||
-            (type == AccountType::MSA && getMSAClientID().isEmpty())) {
+        if (getElyClientID().isEmpty()) {
             writeLaaLoginEvent({ { "kind", "error" }, { "message", "missingClientId" } });
             QTimer::singleShot(0, this, &QCoreApplication::quit);
             return;
         }
-        auto account = MinecraftAccount::createBlank(type);
+        auto account = MinecraftAccount::createBlank(AccountType::Ely);
         auto task = account->login(true);
         connect(task.get(), &AuthFlow::authorizeWithBrowserWithExtra, this,
                 [](const QString& url, const QString& code, int expiresIn) {
