@@ -324,6 +324,7 @@ class Application : public QApplication {
     QString m_instanceIdToShowWindowOf;
     bool m_showMainWindow = false;
     bool m_loginEly = false;
+    QString m_laaLogin;
     bool m_quietLaunch = false;
     std::unique_ptr<QFile> logFile;
     std::unique_ptr<LogModel> logModel;

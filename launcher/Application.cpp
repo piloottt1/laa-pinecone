@@ -55,6 +55,8 @@
 
 #include "ui/dialogs/ProgressDialog.h"
 #include "ui/dialogs/ElyLoginDialog.h"
+#include "minecraft/auth/AuthFlow.h"
+#include "minecraft/auth/MinecraftAccount.h"
 #include "ui/instanceview/AccessibleInstanceView.h"
 
 #include "ui/pages/BasePageProvider.h"
@@ -85,6 +87,7 @@
 #include "ApplicationMessage.h"
 
 #include <iostream>
+#include <cstdio>
 #include <mutex>
 
 #include <QAccessible>
@@ -94,6 +97,8 @@
 #include <QFileInfo>
 #include <QFileOpenEvent>
 #include <QIcon>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QLibraryInfo>
 #include <QList>
 #include <QNetworkAccessManager>
@@ -103,6 +108,13 @@
 #include <QTranslator>
 #include <QTimer>
 #include <QWindow>
+
+static void writeLaaLoginEvent(const QJsonObject& event)
+{
+    const auto line = QJsonDocument(event).toJson(QJsonDocument::Compact) + '\n';
+    std::fwrite(line.constData(), 1, static_cast<size_t>(line.size()), stdout);
+    std::fflush(stdout);
+}
 
 #include "InstanceList.h"
 #include "MTPixmapCache.h"
@@ -324,6 +336,7 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
           { "alive", "Write a small '" + liveCheckFile + "' file after the launcher starts" },
           { "show-window", "Show the main launcher window (useful in combination with --launch)" },
           { "ely-login", "Open Ely.by sign-in and save the account without opening the main launcher window" },
+          { { "laa-login" }, "Sign in without PineconeMC windows and emit JSON events", "ely|msa" },
           { "quiet-launch", "Launch without PineconeMC progress and console windows (use with --launch)" },
           { { "I", "import" }, "Import instance or resource from specified local path or URL", "url" },
           { "show", "Opens the window for the specified instance (by instance ID)", "show" } });
@@ -346,6 +359,12 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
     }
     m_liveCheck = parser.isSet("alive");
     m_loginEly = parser.isSet("ely-login");
+    m_laaLogin = parser.value("laa-login");
+    if (!m_laaLogin.isEmpty() && m_laaLogin != "ely" && m_laaLogin != "msa") {
+        writeLaaLoginEvent({ { "kind", "error" }, { "message", "invalidProvider" } });
+        m_status = Application::Failed;
+        return;
+    }
     m_quietLaunch = parser.isSet("quiet-launch");
 
     m_instanceIdToShowWindowOf = parser.value("show");
@@ -466,6 +485,11 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
         m_peerInstance = new LocalPeer(this, appID);
         connect(m_peerInstance, &LocalPeer::messageReceived, this, &Application::messageReceived);
         if (m_peerInstance->isClient()) {
+            if (!m_laaLogin.isEmpty()) {
+                writeLaaLoginEvent({ { "kind", "error" }, { "message", "pineconeRunning" } });
+                m_status = Application::Failed;
+                return;
+            }
             bool sentMessage = false;
             int timeout = 2000;
 
@@ -1230,7 +1254,7 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
         installEventFilter(new ToolTipFilter);
     }
 
-    if (!m_loginEly && createSetupWizard()) {
+    if (!m_loginEly && m_laaLogin.isEmpty() && createSetupWizard()) {
         return;
     }
 
@@ -1366,6 +1390,43 @@ void Application::setupWizardFinished(int status)
 void Application::performMainStartupAction()
 {
     m_status = Application::Initialized;
+    if (!m_laaLogin.isEmpty()) {
+        const auto type = m_laaLogin == "ely" ? AccountType::Ely : AccountType::MSA;
+        if ((type == AccountType::Ely && getElyClientID().isEmpty()) ||
+            (type == AccountType::MSA && getMSAClientID().isEmpty())) {
+            writeLaaLoginEvent({ { "kind", "error" }, { "message", "missingClientId" } });
+            QTimer::singleShot(0, this, &QCoreApplication::quit);
+            return;
+        }
+        auto account = MinecraftAccount::createBlank(type);
+        auto task = account->login(true);
+        connect(task.get(), &AuthFlow::authorizeWithBrowserWithExtra, this,
+                [](const QString& url, const QString& code, int expiresIn) {
+                    writeLaaLoginEvent({ { "kind", "code" }, { "url", url }, { "code", code }, { "expires", expiresIn } });
+                });
+        connect(task.get(), &Task::status, this, [](const QString& message) {
+            writeLaaLoginEvent({ { "kind", "status" }, { "message", message } });
+        });
+        connect(task.get(), &Task::failed, this, [this, account](const QString& message) {
+            writeLaaLoginEvent({ { "kind", "error" }, { "message", message } });
+            QTimer::singleShot(0, this, &QCoreApplication::quit);
+        });
+        connect(task.get(), &Task::aborted, this, [this] {
+            writeLaaLoginEvent({ { "kind", "error" }, { "message", "loginCancelled" } });
+            QTimer::singleShot(0, this, &QCoreApplication::quit);
+        });
+        connect(task.get(), &Task::succeeded, this, [this, account] {
+            const auto index = m_accounts->findAccountByProfileId(account->profileId());
+            const auto selected = index < 0 ? account : m_accounts->at(index);
+            if (index < 0) m_accounts->addAccount(account);
+            m_accounts->setDefaultAccount(selected);
+            writeLaaLoginEvent({ { "kind", "success" }, { "name", selected->profileName() },
+                                 { "id", selected->profileId() } });
+            QTimer::singleShot(0, this, &QCoreApplication::quit);
+        });
+        QMetaObject::invokeMethod(task.get(), &Task::start, Qt::QueuedConnection);
+        return;
+    }
     if (m_loginEly) {
         if (auto account = ElyLoginDialog::newAccount(nullptr)) {
             m_accounts->addAccount(account);
