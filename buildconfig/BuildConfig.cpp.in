@@ -98,6 +98,9 @@ Config::Config()
     if (GIT_REFSPEC.startsWith("refs/heads/")) {
         VERSION_CHANNEL = GIT_REFSPEC;
         VERSION_CHANNEL.remove("refs/heads/");
+        if (VERSION_CHANNEL.startsWith("release-")) {
+            VERSION_CHANNEL = "laa";
+        }
     } else if (!GIT_COMMIT.isEmpty()) {
         VERSION_CHANNEL = GIT_COMMIT.mid(0, 8);
     } else {
